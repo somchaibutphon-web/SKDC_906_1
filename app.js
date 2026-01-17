@@ -5,28 +5,43 @@ const APPS_SCRIPT_URL =
 const APPS_SCRIPT_SECRET =
   "A9xPq7Lm2Zt8Qw1Er5Yu3Io9Kj6Hg4Fs";
 
-/* ====================== API CALL (NO CORS PREFLIGHT) ====================== */
+/* ====================== API CALL (NO CORS PREFLIGHT + TIMEOUT) ====================== */
 async function apiCall(action, data) {
-  // ส่งเป็น text/plain (โดยไม่ตั้ง header) => ไม่เกิด OPTIONS preflight
   const payload = JSON.stringify({
     secret: APPS_SCRIPT_SECRET,
     action: action,
     data: data
   });
 
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: "POST",
-    body: payload
-    // *** ห้ามใส่ headers Content-Type: application/json ***
-  });
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), RUN_TIMEOUT_MS);
 
-  const text = await res.text();
+  let res, text;
+  try {
+    res = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: payload,           // ไม่ตั้ง headers => เลี่ยง preflight
+      signal: controller.signal
+    });
+    text = await res.text();
+  } catch (err) {
+    clearTimeout(t);
+    return { ok: false, message: "Network/Timeout: " + String(err) };
+  } finally {
+    clearTimeout(t);
+  }
+
+  if (!res || !res.ok) {
+    return { ok: false, message: "HTTP " + (res ? res.status : "?"), raw: text || "" };
+  }
+
   try {
     return JSON.parse(text);
   } catch (e) {
-    return { ok:false, message:"Invalid JSON from Apps Script", raw:text };
+    return { ok: false, message: "Invalid JSON from Apps Script", raw: text };
   }
 }
+
 
 
 /* ====================== STATE ====================== */
@@ -572,5 +587,6 @@ window.addEventListener("DOMContentLoaded", function(){
     $("recorder").innerHTML = '<option value="">โหลดรายชื่อไม่สำเร็จ</option>';
   });
 });
+
 
 
