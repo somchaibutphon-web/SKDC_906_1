@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>บันทึกตู้สินค้าน้ำหนักเกิน</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link rel="stylesheet" href="./style.css">
+</head>
+
+<body>
+  <div class="page-bg">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">บันทึกตู้สินค้าน้ำหนักเกิน</div>
+        <div class="card-subtitle">Overweight Container Record</div>
+      </div>
+
+      <div class="card-body">
+
+        <div class="field">
+          <label for="recordDate">วันที่</label>
+          <input type="date" id="recordDate" />
+        </div>
+
+        <button type="button" class="btn-secondary" onclick="openOverweightCalendar()">
+          ดูข้อมูลตามวันที่
+        </button>
+
+        <div class="field">
+          <label for="storeId">หมายเลขสาขา (ตัวเลขเท่านั้น)</label>
+          <input type="text" id="storeId" inputmode="numeric" autocomplete="off" placeholder="เช่น 1234" />
+          <div class="hint">พิมพ์เฉพาะตัวเลข ระบบจะค้นหา Store Name อัตโนมัติ</div>
+        </div>
+
+        <div class="field">
+          <label for="storeNameThai">Store Name Thai</label>
+          <input type="text" id="storeNameThai" class="readonly" readonly placeholder="ค้นหาอัตโนมัติจาก Store ID" />
+        </div>
+
+        <div class="field">
+          <label for="containerNo">หมายเลขตู้สินค้า (A-Z, 0-9 เท่านั้น)</label>
+          <input type="text" id="containerNo" autocomplete="off" maxlength="20" placeholder="เช่น ABCU1234567" />
+          <div class="hint">ระบบจะบังคับเป็นตัวพิมพ์ใหญ่ และตัดอักขระที่ไม่ใช่ A-Z/0-9 อัตโนมัติ</div>
+        </div>
+
+        <div class="field">
+          <label for="bol7">หมายเลข BOL (7 หลักสุดท้าย)</label>
+          <input type="text" id="bol7" inputmode="numeric" autocomplete="off" maxlength="7" placeholder="เช่น 1234567" />
+          <div class="hint">ตัวอย่าง BOL เต็ม: 00009060001234567 → กรอกเฉพาะ 1234567</div>
+        </div>
+
+        <div class="field">
+          <label for="overweightValue">น.น.ที่เกิน</label>
+          <div class="grid-2">
+            <input type="text" id="overweightValue" inputmode="decimal" autocomplete="off" placeholder="เช่น 12.5" />
+            <select id="overweightUnit">
+              <option value="KG">กิโลกรัม (KG)</option>
+              <option value="TON">ตัน (TON)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="palletCount">จำนวนพาเลท</label>
+          <input type="text" id="palletCount" inputmode="numeric" autocomplete="off" placeholder="เช่น 2" />
+        </div>
+
+        <div class="field">
+          <label>แนบรูปภาพ (ไม่จำกัดจำนวน)</label>
+          <div class="single-upload-area">
+            <label class="file-box single">
+              <span>เลือกไฟล์รูปภาพ</span>
+              <small>เลือกได้หลายรูป ระบบจะอัปโหลดทีละไฟล์เพื่อความเสถียร</small>
+              <input type="file" id="fileInput" accept="image/*" multiple>
+            </label>
+
+            <div id="localPreviewImages" class="preview-images preview-local"></div>
+          </div>
+          <div class="hint">แนะนำเลือกจำนวนพอเหมาะต่อครั้ง เพื่อไม่ชนข้อจำกัดเครือข่าย/โควต้าของ Apps Script</div>
+        </div>
+
+        <div class="field">
+          <label for="recorder">ชื่อผู้บันทึก</label>
+          <select id="recorder">
+            <option value="">กำลังโหลดรายชื่อ...</option>
+          </select>
+        </div>
+
+        <button class="btn-primary" id="btnSubmit" onclick="submitOverweight()">
+          บันทึกข้อมูล
+        </button>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
