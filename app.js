@@ -572,21 +572,46 @@ window.addEventListener("DOMContentLoaded", function(){
     }
   });
 
-  // load recorder list
-  apiCall("getRecorderNameList", {}).then(function(res){
-    var sel = $("recorder");
-    sel.innerHTML = '<option value="">เลือกชื่อผู้บันทึก</option>';
-    var list = (res && res.ok) ? (res.data || []) : [];
-    (list || []).forEach(function(name){
-      var opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      sel.appendChild(opt);
-    });
-  }).catch(function(){
-    $("recorder").innerHTML = '<option value="">โหลดรายชื่อไม่สำเร็จ</option>';
+  // load recorder list (robust)
+apiCall("getRecorderNameList", {}).then(function(res){
+  console.log("getRecorderNameList response:", res);
+
+  var sel = $("recorder");
+  if (!sel) return;
+
+  sel.innerHTML = '<option value="">เลือกชื่อผู้บันทึก</option>';
+
+  // รองรับหลายรูปแบบ (data / names / list)
+  var list = [];
+  if (res && res.ok) {
+    if (Array.isArray(res.data)) list = res.data;
+    else if (Array.isArray(res.names)) list = res.names;
+    else if (Array.isArray(res.list)) list = res.list;
+  }
+
+  // ถ้าไม่มีข้อมูล ให้โชว์สถานะ
+  if (!list || !list.length) {
+    sel.innerHTML = '<option value="">ไม่พบรายชื่อในระบบ</option>';
+    return;
+  }
+
+  list.forEach(function(name){
+    name = String(name || "").trim();
+    if (!name) return;
+    var opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
   });
+
+}).catch(function(err){
+  console.log("getRecorderNameList error:", err);
+  var sel = $("recorder");
+  if (sel) sel.innerHTML = '<option value="">โหลดรายชื่อไม่สำเร็จ</option>';
 });
+
+});
+
 
 
 
