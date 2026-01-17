@@ -1,12 +1,31 @@
+/* ====================== CONFIG (GitHub Pages) ====================== */
+const APPS_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycbz78TUKQZrZziIqpPIJ5lwMYygc_W2-SJjWNTPbmUAQty2QRgvfFDoCPrJb9cYaM9sK/exec";
+
+/* Secret ต้องตรงกับ OW_PROXY_SECRET */
+const APPS_SCRIPT_SECRET =
+  "A9xPq7Lm2Zt8Qw1Er5Yu3Io9Kj6Hg4Fs";
+
 /* ====================== API CALL ====================== */
-async function apiCall(action, data){
-  const res = await fetch("/api/callAppsScript", {
+async function apiCall(action, data) {
+  const res = await fetch(APPS_SCRIPT_URL, {
     method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ action, data })
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      secret: APPS_SCRIPT_SECRET,
+      action: action,
+      data: data
+    })
   });
-  return await res.json();
+
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    return { ok:false, message:"Invalid JSON from Apps Script", raw:text };
+  }
 }
+
 
 /* ====================== STATE ====================== */
 var selectedFiles = [];
@@ -551,3 +570,4 @@ window.addEventListener("DOMContentLoaded", function(){
     $("recorder").innerHTML = '<option value="">โหลดรายชื่อไม่สำเร็จ</option>';
   });
 });
+
