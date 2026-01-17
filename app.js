@@ -2,20 +2,22 @@
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbz78TUKQZrZziIqpPIJ5lwMYygc_W2-SJjWNTPbmUAQty2QRgvfFDoCPrJb9cYaM9sK/exec";
 
-/* Secret ต้องตรงกับ OW_PROXY_SECRET */
 const APPS_SCRIPT_SECRET =
   "A9xPq7Lm2Zt8Qw1Er5Yu3Io9Kj6Hg4Fs";
 
-/* ====================== API CALL ====================== */
+/* ====================== API CALL (NO CORS PREFLIGHT) ====================== */
 async function apiCall(action, data) {
+  // ส่งเป็น text/plain (โดยไม่ตั้ง header) => ไม่เกิด OPTIONS preflight
+  const payload = JSON.stringify({
+    secret: APPS_SCRIPT_SECRET,
+    action: action,
+    data: data
+  });
+
   const res = await fetch(APPS_SCRIPT_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      secret: APPS_SCRIPT_SECRET,
-      action: action,
-      data: data
-    })
+    body: payload
+    // *** ห้ามใส่ headers Content-Type: application/json ***
   });
 
   const text = await res.text();
@@ -570,4 +572,5 @@ window.addEventListener("DOMContentLoaded", function(){
     $("recorder").innerHTML = '<option value="">โหลดรายชื่อไม่สำเร็จ</option>';
   });
 });
+
 
