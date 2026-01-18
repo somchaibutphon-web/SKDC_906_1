@@ -5,44 +5,27 @@ const APPS_SCRIPT_URL =
 const APPS_SCRIPT_SECRET =
   "A9xPq7Lm2Zt8Qw1Er5Yu3Io9Kj6Hg4Fs";
 
-/* ====================== API CALL (NO CORS PREFLIGHT + TIMEOUT) ====================== */
+/* ====================== API CALL (NO CORS PREFLIGHT) ====================== */
 async function apiCall(action, data) {
+  // ส่งเป็น text/plain (ไม่ตั้ง Content-Type) => ลดโอกาส OPTIONS preflight
   const payload = JSON.stringify({
     secret: APPS_SCRIPT_SECRET,
     action: action,
     data: data
   });
 
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), RUN_TIMEOUT_MS);
+  const res = await fetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    body: payload
+  });
 
-  let res, text;
-  try {
-    res = await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      body: payload,           // ไม่ตั้ง headers => เลี่ยง preflight
-      signal: controller.signal
-    });
-    text = await res.text();
-  } catch (err) {
-    clearTimeout(t);
-    return { ok: false, message: "Network/Timeout: " + String(err) };
-  } finally {
-    clearTimeout(t);
-  }
-
-  if (!res || !res.ok) {
-    return { ok: false, message: "HTTP " + (res ? res.status : "?"), raw: text || "" };
-  }
-
+  const text = await res.text();
   try {
     return JSON.parse(text);
   } catch (e) {
     return { ok: false, message: "Invalid JSON from Apps Script", raw: text };
   }
 }
-
-
 
 /* ====================== STATE ====================== */
 var selectedFiles = [];
@@ -52,34 +35,34 @@ var isSubmitting = false;
 var RUN_TIMEOUT_MS = 45000;
 var FILE_READ_TIMEOUT_MS = 25000;
 
-function $(id){ return document.getElementById(id); }
+function $(id) { return document.getElementById(id); }
 
-function setDisabled(on){
+function setDisabled(on) {
   var btn = $("btnSubmit");
   if (!btn) return;
   btn.disabled = !!on;
 }
 
 /* ====== Filters / Sanitizers ====== */
-function digitsOnly(v){ return String(v || '').replace(/[^\d]/g,''); }
-function digits7Only(v){ return digitsOnly(v).slice(-7); }
-function decimalOnly(v){
-  v = String(v || '').replace(/[^0-9.]/g,'');
+function digitsOnly(v) { return String(v || '').replace(/[^\d]/g, ''); }
+function digits7Only(v) { return digitsOnly(v).slice(-7); }
+function decimalOnly(v) {
+  v = String(v || '').replace(/[^0-9.]/g, '');
   var parts = v.split('.');
   if (parts.length <= 2) return v;
   return parts[0] + '.' + parts.slice(1).join('');
 }
-function containerOnly(v){
-  return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g,'');
+function containerOnly(v) {
+  return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
 /* ====== Preview ====== */
-function revokeAllObjectUrls(){
-  try{ objectUrls.forEach(function(u){ URL.revokeObjectURL(u); }); }catch(e){}
+function revokeAllObjectUrls() {
+  try { objectUrls.forEach(function (u) { URL.revokeObjectURL(u); }); } catch (e) { }
   objectUrls = [];
 }
 
-function updatePreview(){
+function updatePreview() {
   var box = $("localPreviewImages");
   if (!box) return;
 
@@ -97,7 +80,7 @@ function updatePreview(){
   grid.className = "preview-images-grid";
   box.appendChild(grid);
 
-  selectedFiles.forEach(function(file, idx){
+  selectedFiles.forEach(function (file, idx) {
     var url = URL.createObjectURL(file);
     objectUrls.push(url);
 
@@ -108,7 +91,7 @@ function updatePreview(){
     img.loading = "lazy";
     img.decoding = "async";
     img.src = url;
-    img.alt = "รูปที่ " + (idx+1);
+    img.alt = "รูปที่ " + (idx + 1);
 
     thumb.appendChild(img);
     grid.appendChild(thumb);
@@ -116,74 +99,74 @@ function updatePreview(){
 }
 
 /* ====== Read file as dataURL (per file) ====== */
-function readFileAsDataURL(file){
-  return new Promise(function(resolve){
+function readFileAsDataURL(file) {
+  return new Promise(function (resolve) {
     var reader = new FileReader();
     var done = false;
 
-    var timer = setTimeout(function(){
+    var timer = setTimeout(function () {
       if (done) return;
       done = true;
-      try{ reader.abort(); }catch(e){}
+      try { reader.abort(); } catch (e) { }
       resolve("");
     }, FILE_READ_TIMEOUT_MS);
 
-    reader.onload = function(e){
+    reader.onload = function (e) {
       if (done) return;
       done = true;
       clearTimeout(timer);
       resolve((e && e.target && e.target.result) ? e.target.result : "");
     };
-    reader.onerror = function(){
+    reader.onerror = function () {
       if (done) return;
       done = true;
       clearTimeout(timer);
       resolve("");
     };
 
-    try{ reader.readAsDataURL(file); }
-    catch(e){ clearTimeout(timer); resolve(""); }
+    try { reader.readAsDataURL(file); }
+    catch (e) { clearTimeout(timer); resolve(""); }
   });
 }
 
 /* ====== Lookup Store Name ====== */
 var storeLookupTimer = 0;
 
-function scheduleStoreLookup(){
+function scheduleStoreLookup() {
   clearTimeout(storeLookupTimer);
   storeLookupTimer = setTimeout(doStoreLookup, 350);
 }
 
-async function doStoreLookup(){
+async function doStoreLookup() {
   var storeId = digitsOnly($("storeId").value);
   $("storeId").value = storeId;
 
-  if (!storeId){
+  if (!storeId) {
     $("storeNameThai").value = "";
     return;
   }
 
   $("storeNameThai").value = "กำลังค้นหา...";
 
-  try{
+  try {
     var res = await apiCall("lookupStoreNameThai", { storeId: storeId });
-    if (res && res.ok){
+    if (res && res.ok) {
       $("storeNameThai").value = res.storeName || "-";
     } else {
       $("storeNameThai").value = "";
     }
-  }catch(e){
+  } catch (e) {
     $("storeNameThai").value = "";
   }
 }
 
 /* ====== Upload image one-by-one to server ====== */
-async function uploadImagesSequential(meta){
+async function uploadImagesSequential(meta) {
   var ids = [];
 
-  for (var i=0; i<selectedFiles.length; i++){
+  for (var i = 0; i < selectedFiles.length; i++) {
     Swal.update({
-      html: "โปรดรอสักครู่ ระบบกำลังอัปโหลดรูป ("+(i+1)+"/"+selectedFiles.length+")"
+      html: "โปรดรอสักครู่ ระบบกำลังอัปโหลดรูป (" + (i + 1) + "/" + selectedFiles.length + ")"
     });
 
     var dataUrl = await readFileAsDataURL(selectedFiles[i]);
@@ -192,7 +175,7 @@ async function uploadImagesSequential(meta){
     var payload = { dataUrl: dataUrl, meta: meta };
     var res = await apiCall("uploadOverweightImage", payload);
 
-    if (res && res.ok && res.fileId){
+    if (res && res.ok && res.fileId) {
       ids.push(res.fileId);
     }
   }
@@ -201,7 +184,7 @@ async function uploadImagesSequential(meta){
 }
 
 /* ====== Submit ====== */
-async function submitOverweight(){
+async function submitOverweight() {
   if (isSubmitting) return;
 
   var recordDate = $("recordDate").value;
@@ -228,39 +211,39 @@ async function submitOverweight(){
   var recorder = ($("recorder").value || "").trim();
 
   // validation
-  if (!recordDate) return Swal.fire({ icon:"warning", title:"ข้อมูลไม่ครบ", text:"กรุณาเลือกวันที่", confirmButtonText:"ตกลง" });
-  if (!storeId) return Swal.fire({ icon:"warning", title:"ข้อมูลไม่ครบ", text:"กรุณากรอกหมายเลขสาขา (ตัวเลขเท่านั้น)", confirmButtonText:"ตกลง" });
-  if (!storeNameThai) return Swal.fire({ icon:"warning", title:"ยังไม่พบข้อมูลสาขา", text:"กรุณาตรวจสอบหมายเลขสาขาให้ถูกต้อง", confirmButtonText:"ตกลง" });
+  if (!recordDate) return Swal.fire({ icon: "warning", title: "ข้อมูลไม่ครบ", text: "กรุณาเลือกวันที่", confirmButtonText: "ตกลง" });
+  if (!storeId) return Swal.fire({ icon: "warning", title: "ข้อมูลไม่ครบ", text: "กรุณากรอกหมายเลขสาขา (ตัวเลขเท่านั้น)", confirmButtonText: "ตกลง" });
+  if (!storeNameThai) return Swal.fire({ icon: "warning", title: "ยังไม่พบข้อมูลสาขา", text: "กรุณาตรวจสอบหมายเลขสาขาให้ถูกต้อง", confirmButtonText: "ตกลง" });
 
-  if (!containerNo) return Swal.fire({ icon:"warning", title:"ข้อมูลไม่ครบ", text:"กรุณากรอกหมายเลขตู้สินค้า", confirmButtonText:"ตกลง" });
-  if (!/^[A-Z0-9]+$/.test(containerNo)) return Swal.fire({ icon:"warning", title:"รูปแบบไม่ถูกต้อง", text:"หมายเลขตู้สินค้า ต้องเป็น A-Z และ 0-9 เท่านั้น", confirmButtonText:"ตกลง" });
+  if (!containerNo) return Swal.fire({ icon: "warning", title: "ข้อมูลไม่ครบ", text: "กรุณากรอกหมายเลขตู้สินค้า", confirmButtonText: "ตกลง" });
+  if (!/^[A-Z0-9]+$/.test(containerNo)) return Swal.fire({ icon: "warning", title: "รูปแบบไม่ถูกต้อง", text: "หมายเลขตู้สินค้า ต้องเป็น A-Z และ 0-9 เท่านั้น", confirmButtonText: "ตกลง" });
 
-  if (!/^\d{7}$/.test(bol7)) return Swal.fire({ icon:"warning", title:"ข้อมูลไม่ครบ", text:"กรุณากรอก BOL 7 หลักสุดท้ายให้ครบ", confirmButtonText:"ตกลง" });
-  if (!overweightValue || Number(overweightValue) <= 0) return Swal.fire({ icon:"warning", title:"ข้อมูลไม่ครบ", text:"กรุณากรอกน.น.ที่เกิน (ตัวเลข/ทศนิยม)", confirmButtonText:"ตกลง" });
-  if (!palletCount) return Swal.fire({ icon:"warning", title:"ข้อมูลไม่ครบ", text:"กรุณากรอกจำนวนพาเลท (ตัวเลขเท่านั้น)", confirmButtonText:"ตกลง" });
-  if (!recorder) return Swal.fire({ icon:"warning", title:"ข้อมูลไม่ครบ", text:"กรุณาเลือกชื่อผู้บันทึก", confirmButtonText:"ตกลง" });
+  if (!/^\d{7}$/.test(bol7)) return Swal.fire({ icon: "warning", title: "ข้อมูลไม่ครบ", text: "กรุณากรอก BOL 7 หลักสุดท้ายให้ครบ", confirmButtonText: "ตกลง" });
+  if (!overweightValue || Number(overweightValue) <= 0) return Swal.fire({ icon: "warning", title: "ข้อมูลไม่ครบ", text: "กรุณากรอกน.น.ที่เกิน (ตัวเลข/ทศนิยม)", confirmButtonText: "ตกลง" });
+  if (!palletCount) return Swal.fire({ icon: "warning", title: "ข้อมูลไม่ครบ", text: "กรุณากรอกจำนวนพาเลท (ตัวเลขเท่านั้น)", confirmButtonText: "ตกลง" });
+  if (!recorder) return Swal.fire({ icon: "warning", title: "ข้อมูลไม่ครบ", text: "กรุณาเลือกชื่อผู้บันทึก", confirmButtonText: "ตกลง" });
 
   isSubmitting = true;
   setDisabled(true);
 
   // LINE user id (ถ้ามี LIFF) — จะว่างถ้าใช้งานนอก LIFF
   var lineUserId = "";
-  try{
-    if (window.liff && liff.getDecodedIDToken){
+  try {
+    if (window.liff && liff.getDecodedIDToken) {
       var token = liff.getDecodedIDToken();
       lineUserId = token && token.sub ? token.sub : "";
     }
-  }catch(e){}
+  } catch (e) { }
 
   Swal.fire({
     title: "กำลังบันทึกข้อมูล...",
     html: selectedFiles.length ? "เตรียมอัปโหลดรูป..." : "กำลังบันทึกข้อมูล...",
     allowOutsideClick: false,
     allowEscapeKey: false,
-    didOpen: function(){ Swal.showLoading(); }
+    didOpen: function () { Swal.showLoading(); }
   });
 
-  try{
+  try {
     // 1) upload images -> ids
     var meta = {
       storeId: storeId,
@@ -271,7 +254,7 @@ async function submitOverweight(){
     };
 
     var imageIds = [];
-    if (selectedFiles.length){
+    if (selectedFiles.length) {
       imageIds = await uploadImagesSequential(meta);
     }
     var imageIdsJoined = (imageIds || []).join("|");
@@ -295,7 +278,7 @@ async function submitOverweight(){
 
     Swal.close();
 
-    if (res && res.ok){
+    if (res && res.ok) {
       // reset
       $("recordDate").value = "";
       $("storeId").value = "";
@@ -313,104 +296,107 @@ async function submitOverweight(){
       $("localPreviewImages").innerHTML = "";
 
       Swal.fire({
-        icon:"success",
-        title:"บันทึกสำเร็จ",
+        icon: "success",
+        title: "บันทึกสำเร็จ",
         html:
           '<div style="text-align:left; line-height:1.55">' +
           '<div><b>เวลา:</b> ' + (res.timestamp || "-") + '</div>' +
           '<div><b>จำนวนรูปที่บันทึก:</b> ' + (res.imageCount || 0) + ' รูป</div>' +
           '</div>',
-        confirmButtonText:"ปิด"
+        confirmButtonText: "ปิด"
       });
+
     } else {
       Swal.fire({
-        icon:"error",
-        title:"บันทึกไม่สำเร็จ",
+        icon: "error",
+        title: "บันทึกไม่สำเร็จ",
         text: (res && res.message) ? res.message : "ไม่ทราบสาเหตุ",
-        confirmButtonText:"ปิด"
+        confirmButtonText: "ปิด"
       });
     }
 
-  }catch(err){
+  } catch (err) {
     Swal.close();
     Swal.fire({
-      icon:"error",
-      title:"เกิดข้อผิดพลาด",
+      icon: "error",
+      title: "เกิดข้อผิดพลาด",
       text: String(err),
-      confirmButtonText:"ปิด"
+      confirmButtonText: "ปิด"
     });
-  }finally{
+  } finally {
     isSubmitting = false;
     setDisabled(false);
   }
 }
 
-/* ====== Calendar (SweetAlert) ====== */
-function pad2(n){ return String(n).padStart(2,'0'); }
-function toDmy(y, m1, d){ return pad2(d) + '/' + pad2(m1) + '/' + String(y); }
+/* =========================
+   Calendar (SweetAlert)
+   ========================= */
+function pad2(n) { return String(n).padStart(2, '0'); }
+function toDmy(y, m1, d) { return pad2(d) + '/' + pad2(m1) + '/' + String(y); }
 
-async function fetchDatesInMonth(y, m1){
+async function fetchDatesInMonth(y, m1) {
   const res = await apiCall("owGetRecordDatesInMonth", { year: y, month1to12: m1 });
   if (!res || !res.ok) return [];
   return res.dates || [];
 }
 
-async function fetchRowsByDate(dmy){
+async function fetchRowsByDate(dmy) {
   return await apiCall("owGetRecordsByRecordDate", { dmy: dmy });
 }
 
-function buildCalendarHtml(y, m1, datesSet){
+function buildCalendarHtml(y, m1, datesSet) {
   const first = new Date(y, m1 - 1, 1);
   const startDow = first.getDay();
   const daysInMonth = new Date(y, m1, 0).getDate();
 
-  const monthNamesTH = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+  const monthNamesTH = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
   const title = monthNamesTH[m1 - 1] + " " + y;
 
-  const dows = ["อา","จ","อ","พ","พฤ","ศ","ส"];
+  const dows = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 
   let html =
     '<div class="ow-cal-wrap">' +
-      '<div class="ow-cal-head">' +
-        '<div class="ow-cal-title">' + title + '</div>' +
-        '<div class="ow-cal-nav">' +
-          '<button type="button" id="owCalPrev">ก่อนหน้า</button>' +
-          '<button type="button" id="owCalNext">ถัดไป</button>' +
-        '</div>' +
-      '</div>' +
-      '<div class="ow-cal-grid" id="owCalGrid">';
+    '<div class="ow-cal-head">' +
+    '<div class="ow-cal-title">' + title + '</div>' +
+    '<div class="ow-cal-nav">' +
+    '<button type="button" id="owCalPrev">ก่อนหน้า</button>' +
+    '<button type="button" id="owCalNext">ถัดไป</button>' +
+    '</div>' +
+    '</div>' +
+    '<div class="ow-cal-grid" id="owCalGrid">';
 
-  for (let i=0;i<7;i++){
+  for (let i = 0; i < 7; i++) {
     html += '<div class="ow-cal-dow">' + dows[i] + '</div>';
   }
 
-  for (let i=0;i<startDow;i++){
+  for (let i = 0; i < startDow; i++) {
     html += '<div class="ow-cal-day muted"></div>';
   }
 
-  for (let d=1; d<=daysInMonth; d++){
+  for (let d = 1; d <= daysInMonth; d++) {
     const key = toDmy(y, m1, d);
     const has = datesSet[key] ? 'has-data' : '';
-    const dataAttr = datesSet[key] ? 'data-date="'+key+'"' : '';
+    const dataAttr = datesSet[key] ? 'data-date="' + key + '"' : '';
     html += '<div class="ow-cal-day ' + has + '" ' + dataAttr + '>' + d + '</div>';
   }
 
   html +=
-      '</div>' +
-      '<div class="ow-cal-legend"><span class="ow-cal-dot"></span>วันที่มีข้อมูลบันทึก</div>' +
+    '</div>' +
+    '<div class="ow-cal-legend"><span class="ow-cal-dot"></span>วันที่มีข้อมูลบันทึก</div>' +
     '</div>';
 
   return html;
 }
 
-async function openOverweightCalendar(){
+async function openOverweightCalendar() {
   const now = new Date();
   let y = now.getFullYear();
   let m1 = now.getMonth() + 1;
   await renderCalendarModal(y, m1);
 }
 
-async function renderCalendarModal(y, m1){
+async function renderCalendarModal(y, m1) {
   Swal.fire({
     title: "ปฏิทินข้อมูล",
     html: "กำลังโหลด...",
@@ -419,7 +405,7 @@ async function renderCalendarModal(y, m1){
     didOpen: async () => {
       Swal.showLoading();
 
-      try{
+      try {
         const dates = await fetchDatesInMonth(y, m1);
         const datesSet = {};
         (dates || []).forEach(d => { datesSet[d] = true; });
@@ -430,12 +416,12 @@ async function renderCalendarModal(y, m1){
 
         document.getElementById("owCalPrev").onclick = async () => {
           let yy = y, mm = m1 - 1;
-          if (mm < 1){ mm = 12; yy--; }
+          if (mm < 1) { mm = 12; yy--; }
           await renderCalendarModal(yy, mm);
         };
         document.getElementById("owCalNext").onclick = async () => {
           let yy = y, mm = m1 + 1;
-          if (mm > 12){ mm = 1; yy++; }
+          if (mm > 12) { mm = 1; yy++; }
           await renderCalendarModal(yy, mm);
         };
 
@@ -447,43 +433,43 @@ async function renderCalendarModal(y, m1){
           });
         });
 
-      }catch(err){
+      } catch (err) {
         Swal.update({ icon: "error", html: "โหลดปฏิทินไม่สำเร็จ: " + String(err) });
       }
     }
   });
 }
 
-function buildRecordHtml(res){
+function buildRecordHtml(res) {
   const rows = (res && res.rows) ? res.rows : [];
   const date = (res && res.date) ? res.date : "";
 
-  if (!rows.length){
+  if (!rows.length) {
     return '<div style="text-align:left">ไม่พบข้อมูลของวันที่ ' + date + '</div>';
   }
 
   let html =
     '<div style="text-align:left; line-height:1.55">' +
-      '<div style="font-weight:800; margin-bottom:8px;">วันที่: ' + date + ' (ทั้งหมด ' + rows.length + ' รายการ)</div>';
+    '<div style="font-weight:800; margin-bottom:8px;">วันที่: ' + date + ' (ทั้งหมด ' + rows.length + ' รายการ)</div>';
 
   rows.forEach((r, idx) => {
     const imgs = (r.imageIds || []).map(id => 'https://lh5.googleusercontent.com/d/' + id);
 
     html +=
       '<div style="border:1px solid rgba(15,23,42,.10); border-radius:14px; padding:10px; margin-bottom:10px; background:#fff;">' +
-        '<div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">' +
-          '<div><b>#' + (idx+1) + '</b> <span style="color:rgba(100,116,139,.95)">(' + (r.timestamp || "-") + ')</span></div>' +
-          '<div style="font-weight:800">' + (r.storeId || "-") + ' — ' + (r.storeNameThai || "-") + '</div>' +
-        '</div>' +
-        '<div style="margin-top:6px; color:rgba(15,23,42,.92)">' +
-          '<div><b>ตู้สินค้า:</b> ' + (r.containerNo || "-") + '</div>' +
-          '<div><b>BOL:</b> ' + (r.bol7 || "-") + '</div>' +
-          '<div><b>น.น.ที่เกิน:</b> ' + (r.overweightValue || 0) + ' ' + (r.unit || "KG") + '</div>' +
-          '<div><b>พาเลท:</b> ' + (r.palletCount || 0) + '</div>' +
-          '<div><b>ผู้บันทึก:</b> ' + (r.recorder || "-") + '</div>' +
-        '</div>';
+      '<div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">' +
+      '<div><b>#' + (idx + 1) + '</b> <span style="color:rgba(100,116,139,.95)">(' + (r.timestamp || "-") + ')</span></div>' +
+      '<div style="font-weight:800">' + (r.storeId || "-") + ' — ' + (r.storeNameThai || "-") + '</div>' +
+      '</div>' +
+      '<div style="margin-top:6px; color:rgba(15,23,42,.92)">' +
+      '<div><b>ตู้สินค้า:</b> ' + (r.containerNo || "-") + '</div>' +
+      '<div><b>BOL:</b> ' + (r.bol7 || "-") + '</div>' +
+      '<div><b>น.น.ที่เกิน:</b> ' + (r.overweightValue || 0) + ' ' + (r.unit || "KG") + '</div>' +
+      '<div><b>พาเลท:</b> ' + (r.palletCount || 0) + '</div>' +
+      '<div><b>ผู้บันทึก:</b> ' + (r.recorder || "-") + '</div>' +
+      '</div>';
 
-    if (imgs.length){
+    if (imgs.length) {
       html += '<div class="ow-img-grid">';
       imgs.forEach(url => {
         html += '<a href="' + url + '" target="_blank" rel="noopener"><img src="' + url + '" alt="img"></a>';
@@ -500,7 +486,7 @@ function buildRecordHtml(res){
   return html;
 }
 
-async function showRecordsForDate(dmy){
+async function showRecordsForDate(dmy) {
   Swal.fire({
     title: "กำลังดึงข้อมูล...",
     text: "โปรดรอสักครู่",
@@ -508,62 +494,136 @@ async function showRecordsForDate(dmy){
     didOpen: () => Swal.showLoading()
   });
 
-  try{
+  try {
     const res = await fetchRowsByDate(dmy);
-    if (!res || !res.ok){
+    if (!res || !res.ok) {
       Swal.fire({
-        icon:"error",
-        title:"ไม่สามารถดึงข้อมูลได้",
+        icon: "error",
+        title: "ไม่สามารถดึงข้อมูลได้",
         text: (res && res.message) ? res.message : "กรุณาลองใหม่",
-        confirmButtonText:"ปิด"
+        confirmButtonText: "ปิด"
       });
       return;
     }
 
     Swal.fire({
-      icon:"info",
-      title:"ข้อมูลวันที่ " + dmy,
+      icon: "info",
+      title: "ข้อมูลวันที่ " + dmy,
       html: buildRecordHtml(res),
       width: 720,
-      confirmButtonText:"ปิด"
+      confirmButtonText: "ปิด"
     });
 
-  }catch(err){
+  } catch (err) {
     Swal.fire({
-      icon:"error",
-      title:"เกิดข้อผิดพลาด",
+      icon: "error",
+      title: "เกิดข้อผิดพลาด",
       text: String(err),
-      confirmButtonText:"ปิด"
+      confirmButtonText: "ปิด"
     });
   }
 }
 
+/* ======================
+   Recorder list: fast + stable (cache + retry)
+   ====================== */
+const REC_CACHE_KEY = "ow_recorder_list_cache_v1";
+const REC_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 ชั่วโมง
+
+function getCachedRecorderList() {
+  try {
+    const raw = localStorage.getItem(REC_CACHE_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || !Array.isArray(obj.list)) return null;
+    if (Date.now() - (obj.ts || 0) > REC_CACHE_TTL_MS) return null;
+    return obj.list;
+  } catch (e) {
+    return null;
+  }
+}
+
+function setCachedRecorderList(list) {
+  try {
+    localStorage.setItem(REC_CACHE_KEY, JSON.stringify({ ts: Date.now(), list: list }));
+  } catch (e) { }
+}
+
+function renderRecorderSelect(list, noteText) {
+  var sel = $("recorder");
+  if (!sel) return;
+
+  sel.innerHTML = '<option value="">เลือกชื่อผู้บันทึก</option>';
+
+  if (noteText) {
+    var optNote = document.createElement("option");
+    optNote.value = "";
+    optNote.textContent = noteText;
+    optNote.disabled = true;
+    sel.appendChild(optNote);
+  }
+
+  (list || []).forEach(function (name) {
+    name = String(name || "").trim();
+    if (!name) return;
+    var opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  });
+}
+
+async function fetchRecorderListWithRetry() {
+  const delays = [400, 1000, 2000];
+  let lastErr = null;
+
+  for (let i = 0; i < delays.length; i++) {
+    try {
+      const res = await apiCall("getRecorderNameList", {});
+      if (res && res.ok) {
+        const list = Array.isArray(res.data) ? res.data : [];
+        if (list.length) return list;
+        lastErr = new Error("Empty list");
+      } else {
+        lastErr = new Error((res && res.message) ? res.message : "Bad response");
+      }
+    } catch (e) {
+      lastErr = e;
+    }
+    await new Promise(r => setTimeout(r, delays[i]));
+  }
+
+  throw lastErr || new Error("Failed to load recorder list");
+}
+
 /* ====== DOM Ready ====== */
-window.addEventListener("DOMContentLoaded", function(){
-  $("storeId").addEventListener("input", function(){
+window.addEventListener("DOMContentLoaded", function () {
+  // input restrictions
+  $("storeId").addEventListener("input", function () {
     this.value = digitsOnly(this.value);
     scheduleStoreLookup();
   });
 
-  $("bol7").addEventListener("input", function(){
+  $("bol7").addEventListener("input", function () {
     this.value = digits7Only(this.value);
   });
 
-  $("overweightValue").addEventListener("input", function(){
+  $("overweightValue").addEventListener("input", function () {
     this.value = decimalOnly(this.value);
   });
 
-  $("palletCount").addEventListener("input", function(){
+  $("palletCount").addEventListener("input", function () {
     this.value = digitsOnly(this.value);
   });
 
-  $("containerNo").addEventListener("input", function(){
+  $("containerNo").addEventListener("input", function () {
     const cleaned = containerOnly(this.value);
     if (this.value !== cleaned) this.value = cleaned;
   });
 
-  $("fileInput").addEventListener("change", function(){
-    if (this.files && this.files.length){
+  // file input
+  $("fileInput").addEventListener("change", function () {
+    if (this.files && this.files.length) {
       selectedFiles = Array.prototype.slice.call(this.files);
       updatePreview();
     } else {
@@ -572,46 +632,32 @@ window.addEventListener("DOMContentLoaded", function(){
     }
   });
 
-  // load recorder list (robust)
-apiCall("getRecorderNameList", {}).then(function(res){
-  console.log("getRecorderNameList response:", res);
+  // recorder list: show cached instantly, then refresh with retry
+  (function initRecorderList() {
+    var sel = $("recorder");
+    if (!sel) return;
 
-  var sel = $("recorder");
-  if (!sel) return;
+    const cached = getCachedRecorderList();
+    if (cached && cached.length) {
+      renderRecorderSelect(cached, "กำลังอัปเดตรายชื่อ...");
+    } else {
+      sel.innerHTML = '<option value="">กำลังโหลดรายชื่อ...</option>';
+    }
 
-  sel.innerHTML = '<option value="">เลือกชื่อผู้บันทึก</option>';
+    fetchRecorderListWithRetry()
+      .then(function (list) {
+        setCachedRecorderList(list);
+        renderRecorderSelect(list, null);
+      })
+      .catch(function (err) {
+        console.log("Recorder list load failed:", err);
 
-  // รองรับหลายรูปแบบ (data / names / list)
-  var list = [];
-  if (res && res.ok) {
-    if (Array.isArray(res.data)) list = res.data;
-    else if (Array.isArray(res.names)) list = res.names;
-    else if (Array.isArray(res.list)) list = res.list;
-  }
-
-  // ถ้าไม่มีข้อมูล ให้โชว์สถานะ
-  if (!list || !list.length) {
-    sel.innerHTML = '<option value="">ไม่พบรายชื่อในระบบ</option>';
-    return;
-  }
-
-  list.forEach(function(name){
-    name = String(name || "").trim();
-    if (!name) return;
-    var opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = name;
-    sel.appendChild(opt);
-  });
-
-}).catch(function(err){
-  console.log("getRecorderNameList error:", err);
-  var sel = $("recorder");
-  if (sel) sel.innerHTML = '<option value="">โหลดรายชื่อไม่สำเร็จ</option>';
+        const cached2 = getCachedRecorderList();
+        if (cached2 && cached2.length) {
+          renderRecorderSelect(cached2, "อัปเดตไม่สำเร็จ (ใช้รายชื่อเดิม)");
+        } else {
+          sel.innerHTML = '<option value="">โหลดรายชื่อไม่สำเร็จ (ลองรีเฟรช)</option>';
+        }
+      });
+  })();
 });
-
-});
-
-
-
-
